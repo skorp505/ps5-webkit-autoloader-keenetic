@@ -16,7 +16,7 @@
 ## Что положить
 
 | Файл | Зачем | Порядок |
-|---|---|---|
+| --- | --- | --- |
 | `pldmgr.elf` | Payload Manager | 1 |
 | `allinOne.elf` | всё-в-одном от Akela-1979 | 2 |
 | `kstuff.elf` | ядерный эксплоит kstuff (sleirsgoevy, Echo Stretch) | 3 |
