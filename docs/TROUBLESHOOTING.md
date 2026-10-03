@@ -66,7 +66,7 @@ dig +short @192.168.90.1 manuals.playstation.net
 
 Смотри строку в логе на экране приставки:
 
-```
+```text
 [+] elfldr is listening on port 9021
 [+] pldmgr.elf sent
 [+] allinOne.elf sent
