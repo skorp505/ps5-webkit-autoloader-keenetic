@@ -27,7 +27,7 @@ PS5 ──HTTPS:443──> Keenetic (встроенный nginx) ──> /storag
 
 ## Требования
 
-| --- | --- |
+| Параметр | Требование |
 | --- | --- |
 | Роутер | Keenetic с Entware (включить: веб-интерфейс → Общие настройки → Компоненты → Entware) и встроенным `/usr/sbin/nginx` |
 | Проверено на | Keenetic Hopper SE KN-3812, KeeneticOS 5.01.C.2.0-2, aarch64 |
