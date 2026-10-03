@@ -3,12 +3,12 @@
 Сначала три команды, они покрывают большинство случаев:
 
 ```bash
-dig +short @192.168.90.1 manuals.playstation.net
-curl -sk -o /dev/null -w '%{http_code}\n' --resolve manuals.playstation.net:443:192.168.90.1 https://manuals.playstation.net/
-ssh -p 222 root@192.168.90.1 '/opt/etc/init.d/S50relapse-nginx status; tail -20 /storage/www/relapse-access.log'
+dig +short @192.168.1.1 manuals.playstation.net
+curl -sk -o /dev/null -w '%{http_code}\n' --resolve manuals.playstation.net:443:192.168.1.1 https://manuals.playstation.net/
+ssh -p 222 root@192.168.1.1 '/opt/etc/init.d/S50relapse-nginx status; tail -20 /storage/www/relapse-access.log'
 ```
 
-Ожидаемо: `192.168.90.1`, `200`, `relapse nginx running`.
+Ожидаемо: `192.168.1.1`, `200`, `relapse nginx running`.
 
 ## Руководство открывается, но страница чёрная
 
@@ -19,7 +19,7 @@ ssh -p 222 root@192.168.90.1 '/opt/etc/init.d/S50relapse-nginx status; tail -20 
 в `/storage/www/relapse-nginx.conf`. Проверить:
 
 ```bash
-ssh -p 222 root@192.168.90.1 "grep -A2 'document/ru' /storage/www/relapse-nginx.conf"
+ssh -p 222 root@192.168.1.1 "grep -A2 'document/ru' /storage/www/relapse-nginx.conf"
 ```
 
 Бывает и обратное: в конфиге осталась заглушка `try_files $uri $uri/ /index.html`
@@ -34,10 +34,10 @@ ssh -p 222 root@192.168.90.1 "grep -A2 'document/ru' /storage/www/relapse-nginx.
 не доходит. Проверь, что DNS отдаёт нужный IP и что 443 занят нашим nginx:
 
 ```bash
-ssh -p 222 root@192.168.90.1 "netstat -ltnp | grep relapse-nginx"
+ssh -p 222 root@192.168.1.1 "netstat -ltnp | grep relapse-nginx"
 ```
 
-Ожидаются три строки: `192.168.90.1:443`, `:8443`, `:8888`.
+Ожидаются три строки: `192.168.1.1:443`, `:8443`, `:8888`.
 
 ## Порт 443 занят, nginx не стартует
 
@@ -45,9 +45,9 @@ ssh -p 222 root@192.168.90.1 "netstat -ltnp | grep relapse-nginx"
 HTTPS веб-интерфейса роутера не переехал. Проверить и починить:
 
 ```bash
-ssh -p 222 root@192.168.90.1 "/bin/ndmc -c 'show running-config' | grep 'ip http'"
-ssh -p 222 root@192.168.90.1 "/bin/ndmc -c 'ip http ssl port 8444'"
-ssh -p 222 root@192.168.90.1 "/opt/etc/init.d/S50relapse-nginx restart"
+ssh -p 222 root@192.168.1.1 "/bin/ndmc -c 'show running-config' | grep 'ip http'"
+ssh -p 222 root@192.168.1.1 "/bin/ndmc -c 'ip http ssl port 8444'"
+ssh -p 222 root@192.168.1.1 "/opt/etc/init.d/S50relapse-nginx restart"
 ```
 
 ## DNS отдаёт публичный адрес вместо роутера
@@ -56,7 +56,7 @@ ssh -p 222 root@192.168.90.1 "/opt/etc/init.d/S50relapse-nginx restart"
 
 ```bash
 # на компьютере в той же сети
-dig +short @192.168.90.1 manuals.playstation.net
+dig +short @192.168.1.1 manuals.playstation.net
 ```
 
 Если ответ верный, а приставка всё равно идёт по старому адресу — перезагрузи
@@ -79,10 +79,10 @@ dig +short @192.168.90.1 manuals.playstation.net
 пейлоадов непустой и хук на месте:
 
 ```bash
-ssh -p 222 root@192.168.90.1 "ls -l /storage/www/relapse/payloads"
-ssh -p 222 root@192.168.90.1 "cat /storage/www/relapse/payloads.json"
-ssh -p 222 root@192.168.90.1 "ls -l /storage/www/relapse/src/relapse-payloads.js"
-ssh -p 222 root@192.168.90.1 "grep -c relapse-payloads /storage/www/relapse/src/main.js"
+ssh -p 222 root@192.168.1.1 "ls -l /storage/www/relapse/payloads"
+ssh -p 222 root@192.168.1.1 "cat /storage/www/relapse/payloads.json"
+ssh -p 222 root@192.168.1.1 "ls -l /storage/www/relapse/src/relapse-payloads.js"
+ssh -p 222 root@192.168.1.1 "grep -c relapse-payloads /storage/www/relapse/src/main.js"
 ```
 
 В access-логе должен быть запрос `GET /document/ru/ps5/payloads/<файл>`. Если его
@@ -92,14 +92,14 @@ ssh -p 222 root@192.168.90.1 "grep -c relapse-payloads /storage/www/relapse/src/
 Вернуть исходный `main.js` и поставить заново с пейлоадами:
 
 ```bash
-./install.sh --host 192.168.90.1 --password <пароль> --reset-payload-patch
+./install.sh --host 192.168.1.1 --password <пароль> --reset-payload-patch
 ```
 
 Отправить вручную с роутера:
 
 ```bash
-ssh -p 222 root@192.168.90.1 \
-  /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin
+ssh -p 222 root@192.168.1.1 \
+  /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin <ip приставки>
 ```
 
 ## Приставка не отвечает на ping
@@ -113,8 +113,8 @@ ssh -p 222 root@192.168.90.1 \
 Проверь автозапуск:
 
 ```bash
-ssh -p 222 root@192.168.90.1 "ls -l /opt/etc/init.d/S50relapse-nginx"
-ssh -p 222 root@192.168.90.1 "/opt/etc/init.d/S50relapse-nginx status"
+ssh -p 222 root@192.168.1.1 "ls -l /opt/etc/init.d/S50relapse-nginx"
+ssh -p 222 root@192.168.1.1 "/opt/etc/init.d/S50relapse-nginx status"
 ```
 
 Если скрипта нет — залей его заново установщиком. Если скрипт есть, но не
@@ -125,14 +125,14 @@ ssh -p 222 root@192.168.90.1 "/opt/etc/init.d/S50relapse-nginx status"
 снова занят панелью, значит `system configuration save` не отработал.
 
 ```bash
-ssh -p 222 root@192.168.90.1 "/bin/ndmc -c 'show running-config' | grep -E 'ip host|ip http'"
-ssh -p 222 root@192.168.90.1 "/bin/ndmc -c 'system configuration save'"
+ssh -p 222 root@192.168.1.1 "/bin/ndmc -c 'show running-config' | grep -E 'ip host|ip http'"
+ssh -p 222 root@192.168.1.1 "/bin/ndmc -c 'system configuration save'"
 ```
 
 ## Мало места на /storage
 
 ```bash
-ssh -p 222 root@192.168.90.1 "df -h /storage; du -sh /storage/www/*"
+ssh -p 222 root@192.168.1.1 "df -h /storage; du -sh /storage/www/*"
 ```
 
 Установщику нужно ~20 МБ. Если места нет, удалите лишнее или подключите
@@ -142,6 +142,6 @@ ssh -p 222 root@192.168.90.1 "df -h /storage; du -sh /storage/www/*"
 ## Полный сброс
 
 ```bash
-./install.sh --host 192.168.90.1 --password <пароль> --uninstall
-./install.sh --host 192.168.90.1 --password <пароль>
+./install.sh --host 192.168.1.1 --password <пароль> --uninstall
+./install.sh --host 192.168.1.1 --password <пароль>
 ```

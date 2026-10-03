@@ -6,7 +6,7 @@
 работают только роутер и приставка.
 
 ```text
-PS5 ──DNS──> Keenetic 192.168.90.1  (manuals.playstation.net = 192.168.90.1)
+PS5 ──DNS──> Keenetic 192.168.1.1  (manuals.playstation.net = 192.168.1.1)
 PS5 ──HTTPS:443──> Keenetic (встроенный nginx) ──> /storage/www/relapse
 ```
 
@@ -40,19 +40,22 @@ PS5 ──HTTPS:443──> Keenetic (встроенный nginx) ──> /storag
 ```bash
 git clone https://github.com/skorp505/ps5-webkit-autoloader-keenetic.git
 cd ps5-webkit-autoloader-keenetic
-./install.sh --host 192.168.90.1 --password <пароль роутера>
+./install.sh --password <пароль роутера>
 ```
+
+Роутер по умолчанию доступен на `192.168.1.1`. Если адрес другой — укажи его:
+`./install.sh --host 192.168.1.1`.
 
 Пароль можно не светить в истории команд:
 
 ```bash
-KEENETIC_PASSWORD=<пароль> ./install.sh --host 192.168.90.1
+KEENETIC_PASSWORD=<пароль> ./install.sh
 ```
 
 Установщик спросит подтверждение, покажет что изменит, всё загрузит, настроит
 DNS, перезапустит nginx и проверит результат. Потом на приставке:
 
-1. **Настройки → Сеть → Настройки → DNS вручную** → `192.168.90.1`
+1. **Настройки → Сеть → Настройки → DNS вручную** → `192.168.1.1`
 2. **Настройки → Руководство пользователя → Да** → выбрать PS5 → пункт с браузером
 3. На предупреждение о сертификате нажать **Да**
 4. Дождаться на экране:
@@ -93,7 +96,7 @@ DNS, перезапустит nginx и проверит результат. По
 
 | Что | Значение |
 | --- | --- |
-| DNS-запись | `ip host manuals.playstation.net 192.168.90.1` |
+| DNS-запись | `ip host manuals.playstation.net 192.168.1.1` |
 | HTTPS панели | `ip http ssl port 8444` (было 443) |
 | Файлы | `/storage/www/relapse`, `/storage/www/cert`, `/storage/www/relapse-nginx.conf` |
 | Автозапуск | `/opt/etc/init.d/S50relapse-nginx` через `rc.unslung` |
@@ -120,7 +123,7 @@ DNS, перезапустит nginx и проверит результат. По
 ## Управление
 
 ```bash
-R="ssh -p 222 root@192.168.90.1"
+R="ssh -p 222 root@192.168.1.1"
 
 $R /opt/etc/init.d/S50relapse-nginx status
 $R /opt/etc/init.d/S50relapse-nginx restart
@@ -131,13 +134,13 @@ $R tail -40 /storage/www/relapse-access.log  # кто что запрашива�
 Отправить пейлоад вручную, если нужно:
 
 ```bash
-$R /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin
+$R /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin <ip приставки>
 ```
 
 ## Обновление Relapse
 
 ```bash
-./install.sh --host 192.168.90.1 --password <пароль>
+./install.sh --host 192.168.1.1 --password <пароль>
 ```
 
 Установщик идемпотентный: перезальёт файлы, заново соберёт `payloads.json` и хук
@@ -146,7 +149,7 @@ $R /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5
 ## Удаление
 
 ```bash
-./install.sh --host 192.168.90.1 --password <пароль> --uninstall
+./install.sh --host 192.168.1.1 --password <пароль> --uninstall
 ```
 
 Останавливает nginx, удаляет файлы и сертификаты, возвращает HTTPS панели на 443,
@@ -158,8 +161,8 @@ $R /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5
 Быстрая проверка:
 
 ```bash
-dig +short @192.168.90.1 manuals.playstation.net     # должен быть 192.168.90.1
-curl -sk --resolve manuals.playstation.net:443:192.168.90.1 https://manuals.playstation.net/
+dig +short @192.168.1.1 manuals.playstation.net     # должен быть 192.168.1.1
+curl -sk --resolve manuals.playstation.net:443:192.168.1.1 https://manuals.playstation.net/
 ```
 
 ## Структура репозитория
@@ -196,7 +199,7 @@ router's own HTTPS UI to 8444, generates a self-signed certificate for that host
 points Keenetic DNS at itself and starts the built-in nginx on 443.
 
 ```bash
-./install.sh --host 192.168.90.1 --password <router-password>
+./install.sh --host 192.168.1.1 --password <router-password>
 ```
 
 Nothing but the router and the console is needed afterwards.

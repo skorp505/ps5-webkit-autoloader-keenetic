@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 # ---------------------------------------------------------------- параметры --
-ROUTER_HOST=""
+ROUTER_HOST="${ROUTER_HOST:-192.168.1.1}"
 ROUTER_USER="root"
 ROUTER_PORT="222"
 ROUTER_PASSWORD="${KEENETIC_PASSWORD:-}"
@@ -31,10 +31,10 @@ usage() {
 install.sh — установка Relapse-эксплоита на роутер Keenetic
 
 Использование:
-  ./install.sh --host 192.168.90.1 [опции]
+  ./install.sh [опции]
 
 Опции:
-  --host ADDR           адрес роутера в локальной сети (обязательно)
+  --host ADDR           адрес роутера в локальной сети (по умолчанию 192.168.1.1)
   --port PORT           порт SSH Entware (по умолчанию 222)
   --user USER           пользователь SSH (по умолчанию root)
   --password PASS       пароль роутера; можно вместо этого задать KEENETIC_PASSWORD
@@ -43,15 +43,15 @@ install.sh — установка Relapse-эксплоита на роутер K
   --upstream URL        другой источник Relapse (tar.gz)
   --admin-ssl-port N    порт HTTPS веб-интерфейса роутера (по умолчанию 8444, 443 освобождается под эксплоит)
   --no-port-change      не менять порт HTTPS веб-интерфейса (тогда эксплоит не встанет на 443)
-  --reset-payload-patch вернуть оригинальный src/kexp.js без автоотправки пейлоадов
+  --reset-payload-patch вернуть оригинальный src/main.js без автоотправки пейлоадов
   --uninstall           снести установку
   -y, --yes             отвечать да на все вопросы
   -h, --help            эта справка
 
 Примеры:
-  ./install.sh --host 192.168.90.1 --password keenetic
-  KEENETIC_PASSWORD=keenetic ./install.sh --host 192.168.90.1
-  ./install.sh --host 192.168.90.1 --password keenetic --source ./Relapse-Exploit
+  ./install.sh --password keenetic
+  KEENETIC_PASSWORD=keenetic ./install.sh
+  ./install.sh --host 192.168.1.1 --password keenetic --source ./Relapse-Exploit
 EOF
 }
 
@@ -408,7 +408,7 @@ EOF
         cat <<EOF
   Пейлоады отправятся сами с приставки — компьютер больше не нужен.
   Если понадобится отправить что-то ещё вручную:
-    ssh -p $ROUTER_PORT $ROUTER_USER@$ROUTER_HOST "$DOC_ROOT/send-payload.sh $DOC_ROOT/payloads/<файл>"
+    ssh -p $ROUTER_PORT $ROUTER_USER@$ROUTER_HOST "$DOC_ROOT/send-payload.sh $DOC_ROOT/payloads/<файл> <ip приставки>"
 EOF
     fi
 }

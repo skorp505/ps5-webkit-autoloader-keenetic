@@ -33,7 +33,7 @@ homebrew, а не голый доступ к ядру.
 cp ~/Загрузки/etaHEN-2.5B.bin ~/Загрузки/allinOne.elf payloads/
 
 # проверить, что установщик их увидит
-./install.sh --host 192.168.90.1 --password ... --source ...
+./install.sh --host 192.168.1.1 --password ... --source ...
 ```
 
 Файлы `*.bin`, `*.elf` и всё прочее добавлены в `.gitignore`, случайно
@@ -44,19 +44,19 @@ cp ~/Загрузки/etaHEN-2.5B.bin ~/Загрузки/allinOne.elf payloads/
 Установщик всё равно может отправить его вручную, компьютер для этого не нужен:
 
 ```bash
-ssh -p 222 root@192.168.90.1 \
-  /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin
+ssh -p 222 root@192.168.1.1 \
+  /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin <ip приставки>
 ```
 
 Вернуть исходный `src/main.js` без автоотправки:
 
 ```bash
-./install.sh --host 192.168.90.1 --password ... --reset-payload-patch
+./install.sh --host 192.168.1.1 --password ... --reset-payload-patch
 ```
 
 Проверить, что всё на месте:
 
 ```bash
-ssh -p 222 root@192.168.90.1 "cat /storage/www/relapse/payloads.json"
-ssh -p 222 root@192.168.90.1 "grep -c relapse-payloads /storage/www/relapse/src/main.js"  # должно быть 1
+ssh -p 222 root@192.168.1.1 "cat /storage/www/relapse/payloads.json"
+ssh -p 222 root@192.168.1.1 "grep -c relapse-payloads /storage/www/relapse/src/main.js"  # должно быть 1
 ```
