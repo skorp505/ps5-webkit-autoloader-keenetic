@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: syntax check
+        run: |
+          for f in install.sh; do bash -n "$f"; done
+          for f in router/S50relapse-nginx router/send-payload.sh; do sh -n "$f"; done
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning install.sh
+          shellcheck -S warning router/S50relapse-nginx router/send-payload.sh
+      - name: markdown lint
+        run: |
+          sudo apt-get install -y -qq markdownlint-cli
+          markdownlint --config .markdownlint.json README.md docs/*.md payloads/README.md

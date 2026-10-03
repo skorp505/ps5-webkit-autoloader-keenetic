@@ -1,0 +1,79 @@
+user root;
+worker_processes 1;
+daemon on;
+pid /tmp/relapse-nginx/nginx.pid;
+error_log /tmp/relapse-nginx/error.log warn;
+
+events {
+    worker_connections 32;
+}
+
+http {
+    default_type application/octet-stream;
+
+    types {
+        text/html                html htm;
+        text/css                 css;
+        text/javascript          js mjs;
+        application/json         json;
+        application/octet-stream elf bin;
+    }
+
+    access_log /storage/www/relapse-access.log;
+    sendfile off;
+    keepalive_timeout 30;
+    server_tokens off;
+
+    client_body_temp_path /tmp/relapse-nginx/body;
+    proxy_temp_path       /tmp/relapse-nginx/proxy;
+
+    # 443 — порт, который бьёт браузер руководства PS5:
+    #       https://manuals.playstation.net/ со стандартным портом и без
+    #       адресной строки, поэтому сертификат должен быть на этот домен.
+    server {
+        listen @LAN_IP@:443 ssl;
+        listen @LAN_IP@:@EXTRA_PORT@ ssl;
+        server_name @HOSTNAME@;
+
+        ssl_certificate     @CERT@;
+        ssl_certificate_key @CERT_KEY@;
+
+        root @DOC_ROOT@;
+        autoindex on;
+        index index.html;
+
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+
+        # PS5 открывает /document/ru/ps5/, поэтому префикс отбрасывается.
+        # Без alias приставка получила бы вместо JS HTML-заглушку.
+        location ^~ /document/ru/ps5/ {
+            alias @DOC_ROOT@/;
+            index index.html;
+        }
+
+        location ^~ /document/en/ps5/ {
+            alias @DOC_ROOT@/;
+            index index.html;
+        }
+
+        location / {
+            add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+            add_header Pragma "no-cache" always;
+        }
+    }
+
+    # запасной вариант: обычный HTTP, если 443 занят или сертификат мешает
+    server {
+        listen @LAN_IP@:@HTTP_PORT@;
+        server_name _;
+        root @DOC_ROOT@;
+        autoindex on;
+        index index.html;
+
+        location / {
+            add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+            add_header Pragma "no-cache" always;
+        }
+    }
+}
