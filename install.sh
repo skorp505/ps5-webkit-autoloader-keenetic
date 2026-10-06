@@ -23,6 +23,8 @@ LOCAL_SOURCE=""
 ASSUME_YES=0
 UNINSTALL=0
 RESET_PAYLOAD_PATCH=0
+WITH_ETAHEN=1
+PS5_IP=""
 
 EXTRA_PORTS=(8443 8888)
 
@@ -44,6 +46,9 @@ install.sh — установка Relapse-эксплоита на роутер K
   --admin-ssl-port N    порт HTTPS веб-интерфейса роутера (по умолчанию 8444, 443 освобождается под эксплоит)
   --no-port-change      не менять порт HTTPS веб-интерфейса (тогда эксплоит не встанет на 443)
   --reset-payload-patch вернуть оригинальный src/main.js без автоотправки пейлоадов
+  --with-etahen         поставить сторож etaHEN (включено по умолчанию)
+  --ps5-ip ADR          адрес приставки для сторожа etaHEN (без него сторожа не будет)
+  --no-etahen-watch     не ставить сторож etaHEN, отправлять вручную
   --uninstall           снести установку
   -y, --yes             отвечать да на все вопросы
   -h, --help            эта справка
@@ -83,6 +88,9 @@ while [ $# -gt 0 ]; do
         --admin-ssl-port) ADMIN_SSL_PORT="$2"; shift 2 ;;
         --no-port-change) ADMIN_SSL_PORT=""; shift ;;
         --reset-payload-patch) RESET_PAYLOAD_PATCH=1; shift ;;
+        --with-etahen) WITH_ETAHEN=1; shift ;;
+        --no-etahen-watch) WITH_ETAHEN=0; shift ;;
+        --ps5-ip) PS5_IP="$2"; shift 2 ;;
         --uninstall) UNINSTALL=1; shift ;;
         -y|--yes) ASSUME_YES=1; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -194,9 +202,12 @@ fetch_relapse() {
 }
 
 # ------------------------------------------------- автоотправка пейлоадов ----
-# Relapse сам пейлоады больше не шлёт (функцию loadOptionalPayloads убрали из
-# kexp.js), поэтому подключаем свой модуль: он берёт список из payloads.json и
-# после строки про "elfldr is listening on port 9021" отправляет их с приставки.
+# В kexp.js из ветки main Relapse функции loadOptionalPayloads нет — там пейлоады
+# приходится слать своим модулем: он берёт список из payloads.json и после строки
+# про "elfldr is listening on port 9021" отправляет их с приставки. Но в сборках,
+# где loadOptionalPayloads есть (архив Akela-1979), хук ломает триггер R2,
+# поэтому patch_payloads сначала проверяет исходник и при наличии штатного пути
+# оставляет его нетронутым.
 HOOK_MARKER="relapse-payloads"
 ANCHOR="elfldr is listening on port 9021"
 
@@ -205,15 +216,29 @@ patch_payloads() {
 
     [ -f "$mainjs" ] || die "нет $mainjs — структура Relapse изменилась"
 
-    # всегда кладём модуль, даже если список пуст: страница сможет отдать его сам
-    cp "$SCRIPT_DIR/router/relapse-payloads.js" "$WORKDIR/site/src/relapse-payloads.js"
-
     if [ "$RESET_PAYLOAD_PATCH" = "1" ]; then
         log "возвращаю main.js без автоотправки пейлоадов"
         rm -f "$WORKDIR/site/payloads.json" "$WORKDIR/site/src/relapse-payloads.js"
         strip_hook "$mainjs"
         return 0
     fi
+
+    # В части сборок Relapse (архив Akela-1979, 2.95 МБ) kexp.js сам экспортирует
+    # loadOptionalPayloads(), а main.js вызывает её по R2 — и туда же входит
+    # allinOne.elf с pldmgr.elf. Патчить main.js в этом случае нельзя: хук
+    # вставляется прямо перед watchR2(), из-за чего R2 не появляется вовсе,
+    # а собственная отправка allinOne роняет рендерер. Поэтому проверяем
+    # наличие штатного пути и оставляем исходник нетронутым.
+    if [ -f "$WORKDIR/site/src/kexp.js" ] \
+        && grep -q 'loadOptionalPayloads' "$WORKDIR/site/src/kexp.js" \
+        && grep -q 'watchR2' "$mainjs"; then
+        log "в исходнике есть штатный loadOptionalPayloads и триггер R2 — патч не нужен"
+        log "allinOne и pldmgr загрузятся по R2, etaHEN — через send-payload.sh на роутере"
+        return 0
+    fi
+
+    # всегда кладём модуль, даже если список пуст: страница сможет отдать его сам
+    cp "$SCRIPT_DIR/router/relapse-payloads.js" "$WORKDIR/site/src/relapse-payloads.js"
 
     if [ "${#PAYLOAD_ORDER[@]}" -eq 0 ]; then
         log "своих пейлоадов нет — payloads.json будет пустым"
@@ -276,6 +301,45 @@ add_hook() {
         die "хук не вставился, main.js не тронут"
     fi
     mv "$file.new" "$file"
+}
+
+# ------------------------------------------------------- сторож etaHEN ----
+# Штатный loadOptionalPayloads() в kexp.js грузит только pldmgr.elf и allinOne.elf,
+# а etaHEN-2.5B.bin отсеивается в mapElf() по требованию ELF-заголовка: это сырой
+# бинарник, а не ELF. Тянуть etaHEN через вебкит не вышло — рендерер на приставке
+# нестабилен и уже ронял страницу на длинной отправке. Поэтому etaHEN отправляет
+# роутер: сторож ждёт, пока приставка поднимет allinOne (8080), и сам скармливает
+# etaHEN в elfldr на 9021. От вебкита не зависит вообще.
+install_etahen_watch() {
+    local watch="$DOC_ROOT/auto-etahen.sh"
+    local init="/opt/etc/init.d/S60relapse-etahen"
+
+    if [ "$WITH_ETAHEN" != "1" ]; then
+        log "сторож etaHEN не ставится (--no-etahen-watch): отправляй вручную"
+        router_cmd "rm -f $watch $init" >/dev/null 2>&1 || true
+        router_cmd "rm -f $DOC_ROOT/ps5.conf" >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    # Без адреса приставки сторож молча слал бы на чужой хост, поэтому адрес
+    # обязателен. Проверяем до начала работы, чтобы не потянуть установку до
+    # момента, когда останется только писать ошибку.
+    [ -n "$PS5_IP" ] || die "укажи адрес приставки: --ps5-ip <адрес>, либо выключи сторож флагом --no-etahen-watch"
+    [ -f "$SCRIPT_DIR/router/auto-etahen.sh" ] || die "нет router/auto-etahen.sh"
+    [ -f "$SCRIPT_DIR/router/S60relapse-etahen" ] || die "нет router/S60relapse-etahen"
+
+    RUN_SCP "$SCRIPT_DIR/router/auto-etahen.sh" "$ROUTER_USER@$ROUTER_HOST:$watch"
+    RUN_SCP "$SCRIPT_DIR/router/S60relapse-etahen" "$ROUTER_USER@$ROUTER_HOST:$init"
+    router_cmd "chmod +x $watch $init"
+
+    # Конфиг пишем всегда, даже когда просто переставляем: без него S60 при
+    # ручном запуске не сможет узнать адрес приставки.
+    router_cmd "printf 'PS5_IP=%s\\n' '$PS5_IP' > $DOC_ROOT/ps5.conf"
+    log "сторож etaHEN: адрес приставки $PS5_IP"
+
+    router_cmd "$init restart" >/dev/null 2>&1 || true
+    log "сторож etaHEN установлен: $init (лог /tmp/relapse-etahen.log)"
+    log "после R2 etaHEN уйдёт автоматически, ждать ~10 c"
 }
 
 collect_payloads() {
@@ -419,7 +483,8 @@ uninstall() {
     log "останавливаю nginx"
     router_cmd "/opt/etc/init.d/S50relapse-nginx stop" >/dev/null 2>&1 || true
     log "удаляю файлы"
-    router_cmd "rm -rf $DOC_ROOT $CERT_DIR $CONF /opt/etc/init.d/S50relapse-nginx"
+    router_cmd "/opt/etc/init.d/S60relapse-etahen stop" >/dev/null 2>&1 || true
+    router_cmd "rm -rf $DOC_ROOT $CERT_DIR $CONF /opt/etc/init.d/S50relapse-nginx /opt/etc/init.d/S60relapse-etahen"
     log "возвращаю HTTPS веб-интерфейса на 443"
     router_cmd "/bin/ndmc -c 'ip http ssl port 443'" >/dev/null 2>&1 || true
     log "удаляю DNS-запись"
@@ -437,6 +502,10 @@ main() {
     fi
 
     [ -n "$ROUTER_HOST" ] || { usage; die "укажите --host"; }
+
+    # Проверяем заранее: адрес приставки нужен, пока сторож включён по умолчанию
+    [ "$WITH_ETAHEN" = "1" ] && [ -z "$PS5_IP" ] \
+        && { usage; die "укажите --ps5-ip <адрес приставки> либо --no-etahen-watch"; }
 
     detect_router
     detect_lan_ip
@@ -459,6 +528,7 @@ main() {
     fetch_relapse
     collect_payloads
     patch_payloads
+    patch_etahen
     gen_cert
     render_conf
 
@@ -469,6 +539,8 @@ main() {
     router_cmd "chmod 600 $CERT_DIR/key.pem"
     RUN_SCP "$SCRIPT_DIR/router/send-payload.sh" "$ROUTER_USER@$ROUTER_HOST:$DOC_ROOT/send-payload.sh"
     router_cmd "chmod +x $DOC_ROOT/send-payload.sh"
+
+    install_etahen_watch
 
     configure_router
     start_service

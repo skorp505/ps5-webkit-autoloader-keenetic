@@ -75,14 +75,28 @@ dig +short @192.168.1.1 manuals.playstation.net
 Если 9021 не поднялся — не отправятся никакие. Вебкит-стадия нестабильна по
 своей природе, страницу можно просто перезагрузить и попробовать снова.
 
-Если `elfldr` есть, а отправки нет, проверь, что файлы на роутере, список
-пейлоадов непустой и хук на месте:
+Если `elfldr` есть, а отправки нет, сначала посмотри, **какая** отправка
+ожидается. В сборках с `loadOptionalPayloads()` (архив Akela-1979, 2.95 МБ)
+штатного R2 достаточно, хука быть не должно, а `etaHEN` отправляется с роутера:
+
+```bash
+ssh -p 222 root@192.168.1.1 "grep -c watchR2 /storage/www/relapse/src/main.js"           # >=1
+ssh -p 222 root@192.168.1.1 "grep -c loadOptionalPayloads /storage/www/relapse/src/kexp.js"
+ssh -p 222 root@192.168.1.1 "grep -c relapse-payloads /storage/www/relapse/src/main.js"   # 0
+```
+
+**Хук не должен стоять там, где есть `watchR2`.** Он вставляется прямо перед
+вызовом `watchR2()` и обрывает его, поэтому R2 не появляется вовсе — а своя
+отправка `allinOne` из приставки роняет рендерер. Если первый счётчик больше
+нуля, а второй — ноль, прогоняй установщик с `--reset-payload-patch`.
+
+Только если `loadOptionalPayloads()` в `kexp.js` **нет** (ветка `main` на
+GitHub), отправка идёт через собственный модуль, и тогда проверяй его:
 
 ```bash
 ssh -p 222 root@192.168.1.1 "ls -l /storage/www/relapse/payloads"
 ssh -p 222 root@192.168.1.1 "cat /storage/www/relapse/payloads.json"
 ssh -p 222 root@192.168.1.1 "ls -l /storage/www/relapse/src/relapse-payloads.js"
-ssh -p 222 root@192.168.1.1 "grep -c relapse-payloads /storage/www/relapse/src/main.js"
 ```
 
 В access-логе должен быть запрос `GET /document/ru/ps5/payloads/<файл>`. Если его

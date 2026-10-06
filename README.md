@@ -79,18 +79,43 @@ DNS, перезапустит nginx и проверит результат. По
    панели на 8444, затем сохраняет конфигурацию
 7. Поднимает nginx и проверяет `https://manuals.playstation.net/` с 200
 
-Файлы пейлоадов из `payloads/` (если есть) тоже загружаются. Relapse сам пейлоады
-больше не отправляет — в актуальной версии из `kexp.js` убрали
-`loadOptionalPayloads()`. Поэтому установщик добавляет своё:
+Файлы пейлоадов из `payloads/` (если есть) тоже загружаются. Дальше установщик
+смотрит, какой исходник скачался:
 
-- `src/relapse-payloads.js` — модуль отправки (mmap ELF в примитив, сокет на
-  `127.0.0.1:9021`, отправка кусками по 64 КБ)
-- `payloads.json` — список файлов, которые нужно отправить
-- хук в `src/main.js` сразу после строки `elfldr is listening on port 9021`
+- **Есть `loadOptionalPayloads()` в `kexp.js` и `watchR2()` в `main.js`** — это
+  сборка вроде архива Akela-1979 (2.95 МБ). Патч не ставится: штатный R2 сам
+  грузит `allinOne.elf` и `pldmgr.elf`. Патчить здесь нельзя: хук вставлялся
+  прямо перед `watchR2()`, из-за чего R2 не появлялся, а своя отправка
+  `allinOne` роняла рендерер.
+- **Функции нет** (ветка `main` на GitHub) — установщик добавляет своё:
+  `src/relapse-payloads.js`, список `payloads.json` и хук в `src/main.js` сразу
+  после строки `elfldr is listening on port 9021`.
 
 Патч идемпотентный: повторный прогон не дублирует хук. Вернуть исходный `main.js`
 можно флагом `--reset-payload-patch`. Подробности в
 [payloads/README.md](payloads/README.md).
+
+### etaHEN
+
+`loadOptionalPayloads()` грузит только `pldmgr.elf` и `allinOne.elf`, а
+`etaHEN-2.5B.bin` в `mapElf()` отсеивается по требованию ELF-заголовка: это сырой
+бинарник, а не ELF. Поэтому etaHEN шлёт роутер — автоматически, отдельным
+сторожем `S60relapse-etahen`.
+
+Логика сторожа: ждёт, пока приставка поднимет `allinOne` (порт 8080), и если
+etaHEN ещё не запущен (порт 1337 закрыт), отправляет `etaHEN-2.5B.bin` в elfldr
+на 9021. От вебкита не зависит совсем, поэтому работает даже если страница
+руководства уже закрыта. Лог — `/tmp/relapse-etahen.log` на роутере.
+
+После R2 etaHEN появляется через ~10 секунд. Адрес приставки обязателен —
+без `--ps5-ip` установщик встанет и попросит указать его. Сохраняется он в
+`/storage/www/relapse/ps5.conf`, рядом — `--no-etahen-watch`, если сторож не нужен
+и отправлять вручную:
+
+```bash
+ssh -p 222 root@192.168.1.1 \
+  '/storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5B.bin <IP-PS5>'
+```
 
 ## Что меняется на роутере
 
@@ -143,8 +168,9 @@ $R /storage/www/relapse/send-payload.sh /storage/www/relapse/payloads/etaHEN-2.5
 ./install.sh --host 192.168.1.1 --password <пароль>
 ```
 
-Установщик идемпотентный: перезальёт файлы, заново соберёт `payloads.json` и хук
-в `main.js`, перезапустит nginx. Данные на `/storage` не трогает.
+Установщик идемпотентный: перезальёт файлы, перезапустит nginx, а патч применит
+только если в исходнике нет `loadOptionalPayloads()`. Данные на `/storage`
+не трогает.
 
 ## Удаление
 
@@ -171,6 +197,8 @@ curl -sk --resolve manuals.playstation.net:443:192.168.1.1 https://manuals.plays
 install.sh                              установщик (запускается с компьютера)
 router/relapse-nginx.conf.tmpl          шаблон конфига nginx
 router/S50relapse-nginx                 автозапуск сервиса на роутере
+router/S60relapse-etahen                автозапуск сторожа etaHEN
+router/auto-etahen.sh                   сам сторож: шлёт etaHEN после allinOne
 router/relapse-payloads.js              модуль автоотправки пейлоадов (кладётся в src/)
 router/send-payload.sh                  ручная отправка пейлоада на приставку
 payloads/                               сюда кладут свои пейлоады (в git не попадают)
